@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Deploys Jenkins to an existing kubernetes cluster"
+
+Parameters:
+  EksClusterName:
+    Type: String
+  Namespace:
+    Type: String
+    Default: jenkins
+    Description: (Optional) Kubernetes namespace to deploy Jenkins into.
+  GitHubUser:
+    Type: String
+    Description: GitHub username or organization
+  GitHubTokenSecretsManager:
+    NoEcho: true
+    Type: String
+    Default: '{{resolve:secretsmanager:/throwaway/slightlyunsecured/ghdemotoken:SecretString:GHToken}}'
+    Description: GitHub Token. Must be defined in AWS Secrets Manager. https://github.com/settings/tokens
+
+Resources:
+
+# TODO: Further restrict user policy. Poweruser for now so that I can experiment with various AWS jenkins plugins.
+# For now this only needs ECR permissions for push & pull actions.
+  JenkinsAWSUser:
+    Type: AWS::IAM::User
+    Description: User identity Jenkins uses to manage AWS resources
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/PowerUserAccess
+
+  JenkinsAccessKey:
+    DependsOn: JenkinsAWSUser
+    Type: AWS::IAM::AccessKey
+    Description: Generate AccessKey for Spinnaker
+    Properties:
+      UserName: !Ref JenkinsAWSUser
+
+  JenkinsAccessKeyCredentials:
+    DependsOn: [JenkinsAWSUser,JenkinsAccessKey]
+    Type: AWS::SecretsManager::Secret
+    Description: Store the access key credentials for Jenkins in a secure location
+    Properties:
+      Description: Jenkins user access key credentials
+      SecretString: !Sub |
+        {
+          "AccessKeyId":"${JenkinsAccessKey}",
+          "SecretAccessKey":"${JenkinsAccessKey.SecretAccessKey}"
+        }
+  JenkinsNamespace:
+    Type: "AWSQS::Kubernetes::Resource"
+    Properties:
+      ClusterName: !Ref EksClusterName
+      Namespace: !Ref Namespace
+      Manifest: !Sub |
+        kind: Namespace
+        apiVersion: v1
+        metadata:
+          name: ${Namespace}
+
+  JenkinsServiceAccount:
+    Type: "AWSQS::Kubernetes::Resource"
+    DependsOn: JenkinsNamespace
+    Properties:
+      ClusterName: !Ref EksClusterName
+      Namespace: !Ref Namespace
+      Manifest: !Sub |
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          labels:
+            app.kubernetes.io/name: jenkins
+          name: jenkins
+
+  JenkinsHelmChart:
+    Type: "AWSQS::Kubernetes::Helm"
+    DependsOn: [JenkinsAWSUser,JenkinsAccessKey,JenkinsServiceAccount]
+    Properties:
+      ClusterID: !Ref EksClusterName
+      Namespace: !Ref Namespace
+      Repository: https://charts.jenkins.io
+      Chart: stable/jenkins
+      ValueYaml: !Sub |
+        controller:
+          # Used for label app.kubernetes.io/component
+          componentName: "jenkins-controller"
+          image: "jenkins/jenkins"
+          additionalPlugins:
+            - aws-codecommit-jobs:0.3.0
+            - aws-java-sdk:1.11.995
+            - junit:1.52
+            - ace-editor:1.1
+            - workflow-support:3.8
+            - pipeline-model-api:1.9.1
+            - pipeline-model-definition:1.9.1
+            - pipeline-model-extensions:1.9.1
+            - workflow-job:2.41
+            - credentials-binding:1.27
+            - aws-credentials:1.30
+            - credentials:2.5
+            - lockable-resources:2.11
+            - branch-api:2.6.5
+            - blueocean:1.24.8
+            - scm-filter-branch-pr:0.5.1
+            - amazon-ecr:1.6
+          JCasC:
+            configScripts:
+              jenkins-casc-configs: |
+                credentials:
+                  system:
+                    domainCredentials:
+                      - credentials:
+                        - usernamePassword:
+                            description: "Github access username and token for Jenkins"
+                            id: "GitHubUserToken"
+                            password: "${GitHubTokenSecretsManager}"
+                            scope: GLOBAL
+                            username: "${GitHubUser}"
+                        - aws:
+                            scope: GLOBAL
+                            id: "AWSJenkinsUser"
+                            accessKey: "${JenkinsAccessKey}"
+                            secretKey: "${JenkinsAccessKey.SecretAccessKey}"
+                            description: "AWS Credentials for Jenkins"
+                        - string:
+                            scope: GLOBAL
+                            id: "ECRRegistry"
+                            secret: "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
+                            description: "ECR base registry URL for pipeline use: ex. ACCOUNT.dkr.ecr.REGION.amazonaws.com"
+          resources:
+            requests:
+              cpu: "1024m"
+              memory: "4Gi"
+            limits:
+              cpu: "4096m"
+              memory: "8Gi"
+          javaOpts: "-Xms4000m -Xmx4000m"
+          servicePort: 80
+          serviceType: LoadBalancer
+        agent:
+          Enabled: false
+        rbac:
+          create: true
+        serviceAccount:
+          create: false
+          name: "jenkins"
+
+#  JenkinsLoadBalancerURL:
+#    Type: AWSQS::Kubernetes::Get
+#    DependsOn: JenkinsHelmChart
+#    Properties:
+#      ClusterName: !Ref EksClusterName
+#      Namespace: !Ref Namespace
+#      Name: !Sub 'service/spin-deck'
+#      JsonPath: '{.status.loadBalancer.ingress[0].hostname}'
+#      Retries: 3
+#
+#Outputs:
+#  DeckUI:
+#    Value: !GetAtt JenkinsLoadBalancerURL.Response

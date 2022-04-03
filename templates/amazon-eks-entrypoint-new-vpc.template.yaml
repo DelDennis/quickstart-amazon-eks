@@ -871,7 +871,7 @@ Resources:
     DependsOn: EKSStack
     Properties:
       TemplateURL: !Sub
-        - 'https://${QSS3BucketName}.s3.${S3Region}.${AWS::URLSuffix}/templates/jenkins.template.yaml'
+        - 'https://${QSS3BucketName}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/jenkins.template.yaml'
         - S3Region: !If [ UsingDefaultBucket, !Ref 'AWS::Region', !Ref QSS3BucketRegion ]
       Parameters:
         EksClusterName: !GetAtt EKSStack.Outputs.EKSClusterName
@@ -881,7 +881,7 @@ Resources:
 #    Type: AWS::CloudFormation::Stack
 #    Properties:
 #      TemplateURL: !Sub
-#        - 'https://${QSS3BucketName}.s3.${S3Region}.${AWS::URLSuffix}/templates/es-fluentbit-firehose.template.yaml'
+#        - 'https://${QSS3BucketName}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/es-fluentbit-firehose.template.yaml'
 #        - S3Region: !If [ UsingDefaultBucket, !Ref 'AWS::Region', !Ref QSS3BucketRegion ]
 #      Parameters:
 #        EksClusterName: !GetAtt EKSStack.Outputs.EKSClusterName
@@ -892,7 +892,7 @@ Resources:
     Condition: SpinnakerEnabled
     Properties:
       TemplateURL: !Sub
-        - 'https://${QSS3BucketName}.s3.${S3Region}.${AWS::URLSuffix}/templates/spinnaker.template.yaml'
+        - 'https://${QSS3BucketName}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/spinnaker.template.yaml'
         - S3Region: !If [ UsingDefaultBucket, !Ref 'AWS::Region', !Ref QSS3BucketRegion ]
       Parameters:
         EksClusterName: !GetAtt EKSStack.Outputs.EKSClusterName
