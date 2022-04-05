@@ -413,7 +413,7 @@ Parameters:
   WindowsNodeVersion:
     Type: String
     AllowedValues: ['2004', '2019']
-    Default: '2004'
+    Default: '2019'
     Description: 'The version of windows to use for Windows Nodegroups.'
   EC2MetadataPutResponseHopLimit:
     Type: String
