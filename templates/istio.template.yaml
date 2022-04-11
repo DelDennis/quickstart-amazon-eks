@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Deploys Istio to an existing kubernetes cluster"
+
+Parameters:
+  EksClusterName:
+    Type: String
+  IstioSystemNamespace:
+    Type: String
+    Default: istio-system
+    Description: (Optional) Kubernetes namespace to deploy Istio control plane intoo.
+  GatewayEnabled:
+    Type: String
+    AllowedValues: [Enabled, Disabled]
+    Default: Disabled
+
+Conditions:
+  EnableGateway: !Equals [!Ref GatewayEnabled, "Enabled"]
+
+Resources:
+
+  IstiodNamespace:
+    Type: "AWSQS::Kubernetes::Resource"
+    Properties:
+      ClusterName: !Ref EksClusterName
+      Namespace: !Ref IstioSystemNamespace
+      Manifest: !Sub |
+        kind: Namespace
+        apiVersion: v1
+        metadata:
+          name: ${IstioSystemNamespace}
+
+  IstioBaseHelm:
+    DependsOn: IstiodNamespace
+    Type: "AWSQS::Kubernetes::Helm"
+    Properties:
+      ClusterID: !Ref EksClusterName
+      Namespace: !Ref IstioSystemNamespace
+      Repository: https://istio-release.storage.googleapis.com/charts
+      Chart: istio/base
+
+  IstioControlPlaneHelm:
+    DependsOn: IstioBaseHelm
+    Type: "AWSQS::Kubernetes::Helm"
+    Properties:
+      ClusterID: !Ref EksClusterName
+      Namespace: !Ref IstioSystemNamespace
+      Repository: https://istio-release.storage.googleapis.com/charts
+      Chart: istio-official/istiod
+
+  IstioGatewayHelm:
+    Condition: EnableGateway
+    DependsOn: IstioControlPlaneHelm
+    Type: "AWSQS::Kubernetes::Helm"
+    Properties:
+      ClusterID: !Ref EksClusterName
+      Namespace: !Ref IstioSystemNamespace
+      Repository: https://istio-release.storage.googleapis.com/charts
+      Chart: stable/jenkins
+
+
+#Outputs:
