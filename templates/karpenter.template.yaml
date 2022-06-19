@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Deploys Karpenter to an existing kubernetes cluster"
+
+Parameters:
+  EksClusterName:
+    Type: String
+  KarpenterNamespace:
+    Type: String
+    Default: karpenter
+    Description: (Optional) Kubernetes namespace to deploy Karpenter into.
+
+
+
+Resources:
+  KarpenterNodeInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      InstanceProfileName: !Sub "KarpenterNodeInstanceProfile-${EksClusterName}"
+      Path: "/"
+      Roles:
+        - Ref: "KarpenterNodeRole"
+
+  KarpenterNodeRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "KarpenterNodeRole-${EksClusterName}"
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                !Sub "ec2.${AWS::URLSuffix}"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonEKS_CNI_Policy"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+
+  KarpenterControllerPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "KarpenterControllerPolicy-${EksClusterName}"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Resource: "*"
+            Action:
+              # Write Operations
+              - ec2:CreateLaunchTemplate
+              - ec2:CreateFleet
+              - ec2:RunInstances
+              - ec2:CreateTags
+              - iam:PassRole
+              - ec2:TerminateInstances
+              - ec2:DeleteLaunchTemplate
+              # Read Operations
+              - ec2:DescribeLaunchTemplates
+              - ec2:DescribeInstances
+              - ec2:DescribeSecurityGroups
+              - ec2:DescribeSubnets
+              - ec2:DescribeInstanceTypes
+              - ec2:DescribeInstanceTypeOfferings
+              - ec2:DescribeAvailabilityZones
+              - ssm:GetParameter
+
+  KarpenterInstallNamespace:
+    Type: "AWSQS::Kubernetes::Resource"
+    Properties:
+      ClusterName: !Ref EksClusterName
+      Namespace: !Ref KarpenterNamespace
+      Manifest: !Sub |
+        kind: Namespace
+        apiVersion: v1
+        metadata:
+          name: ${KarpenterNamespace}
+
+  KarpenterHelm:
+    DependsOn: KarpenterInstallNamespace
+    Type: "AWSQS::Kubernetes::Helm"
+    Properties:
+      ClusterID: !Ref EksClusterName
+      Namespace: !Ref KarpenterNamespace
+      Repository: https://charts.karpenter.sh
+      Chart: karpenter/karpenter
+
+
+
+
+#Outputs:
