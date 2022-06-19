@@ -414,9 +414,6 @@ Parameters:
     Type: String
 <<<<<<< HEAD
     AllowedValues: ['2004', '2019']
-=======
-    AllowedValues: ['2019']
->>>>>>> main
     Default: '2019'
     Description: 'The version of windows to use for Windows Nodegroups.'
   EC2MetadataPutResponseHopLimit:
