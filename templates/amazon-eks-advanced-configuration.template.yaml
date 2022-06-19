@@ -410,7 +410,7 @@ Parameters:
     AllowedValues: [Core, Full]
     Default: Core
     Description: 'The edition of Windows AMI to use for Windows Nodegroups.'
-WindowsNodeVersion:
+  WindowsNodeVersion:
     Type: String
     AllowedValues: ['2019']
     Default: '2019'
