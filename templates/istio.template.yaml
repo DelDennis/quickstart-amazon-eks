@@ -7,7 +7,11 @@ Parameters:
   IstioSystemNamespace:
     Type: String
     Default: istio-system
-    Description: (Optional) Kubernetes namespace to deploy Istio control plane intoo.
+    Description: (Optional) Kubernetes namespace to deploy Istio control plane into.
+  IstioGatewayNamespace:
+    Type: String
+    Default: istio-gateway
+    Description: (Optional) Kubernetes namespace to deploy Istio Gateway into.
   GatewayEnabled:
     Type: String
     AllowedValues: [Enabled, Disabled]
@@ -29,6 +33,18 @@ Resources:
         metadata:
           name: ${IstioSystemNamespace}
 
+  IstioGatewayNS:
+    Condition: EnableGateway
+    Type: "AWSQS::Kubernetes::Resource"
+    Properties:
+      ClusterName: !Ref EksClusterName
+      Namespace: !Ref IstioGatewayNamespace
+      Manifest: !Sub |
+        kind: Namespace
+        apiVersion: v1
+        metadata:
+          name: ${IstioGatewayNamespace}
+
   IstioBaseHelm:
     DependsOn: IstiodNamespace
     Type: "AWSQS::Kubernetes::Helm"
@@ -49,13 +65,14 @@ Resources:
 
   IstioGatewayHelm:
     Condition: EnableGateway
-    DependsOn: IstioControlPlaneHelm
+    DependsOn: [IstioControlPlaneHelm,IstioGatewayNS]
     Type: "AWSQS::Kubernetes::Helm"
     Properties:
       ClusterID: !Ref EksClusterName
-      Namespace: !Ref IstioSystemNamespace
+      Namespace: !Ref IstioGatewayNamespace
       Repository: https://istio-release.storage.googleapis.com/charts
-      Chart: stable/jenkins
+      Chart: istio/gateway
+
 
 
 #Outputs:
