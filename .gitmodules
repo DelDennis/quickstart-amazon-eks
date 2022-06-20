@@ -60,3 +60,6 @@
 [submodule "submodules/quickstart-eks-prometheus"]
 	path = submodules/quickstart-eks-prometheus
 	url = git@github.com:aws-quickstart/quickstart-eks-prometheus.git
+[submodule "submodules/eksquickstart-istio"]
+	path = submodules/eksquickstart-istio
+	url = https://github.com/DelDennis/eksquickstart-istio.git

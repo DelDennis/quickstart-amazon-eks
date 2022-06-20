@@ -916,7 +916,7 @@ Resources:
     Condition: IstioEnabled
     Properties:
       TemplateURL: !Sub
-        - 'https://${QSS3BucketName}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/istio.template.yaml'
+        - 'https://${QSS3BucketName}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}submodules/eksquickstart-istio/templates/istio.template.yaml'
         - S3Region: !If [ UsingDefaultBucket, !Ref 'AWS::Region', !Ref QSS3BucketRegion ]
       Parameters:
         EksClusterName: !GetAtt EKSStack.Outputs.EKSClusterName
