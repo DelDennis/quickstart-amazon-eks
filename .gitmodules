@@ -65,3 +65,18 @@
 [submodule "submodules/eksquickstart-istio"]
 	path = submodules/eksquickstart-istio
 	url = https://github.com/DelDennis/eksquickstart-istio.git
+[submodule "submodules/eksquickstart-jenkins"]
+	path = submodules/eksquickstart-jenkins
+	url = https://github.com/DelDennis/eksquickstart-jenkins.git
+[submodule "submodules/eksquickstart-fluntbit-firehose"]
+	path = submodules/eksquickstart-fluntbit-firehose
+	url = https://github.com/DelDennis/eksquickstart-fluntbit-firehose.git
+[submodule "submodules/eksquickstart-spinnaker"]
+	path = submodules/eksquickstart-spinnaker
+	url = https://github.com/DelDennis/eksquickstart-spinnaker.git
+[submodule "submodules/eksquickstart-karpenter"]
+	path = submodules/eksquickstart-karpenter
+	url = https://github.com/DelDennis/eksquickstart-karpenter.git
+[submodule "submodules/eksquickstart-prometheus-stack"]
+	path = submodules/eksquickstart-prometheus-stack
+	url = https://github.com/DelDennis/eksquickstart-prometheus-stack.git
