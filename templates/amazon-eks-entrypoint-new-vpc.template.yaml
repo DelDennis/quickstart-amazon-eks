@@ -97,6 +97,7 @@ Metadata:
           - AdditionalEKSAdminRoleArn
           - FargateNamespaces
           - FargateLabels
+          - EnableJenkins
       - Label:
           default: Default EKS node group configuration
         Parameters:
@@ -106,6 +107,7 @@ Metadata:
           - NodeGroupOS
           - NodeGroupType
           - NodeInstanceFamily
+          - CustomAmiId
       - Label:
           default: Snyk monitor (AWS Partner security)
         Parameters:
@@ -293,6 +295,10 @@ Metadata:
         default: Prometheus integration
       GrafanaIntegration:
         default: Grafana integration
+      CustomAmiId:
+        default: Custom AMI ID
+      EnableJenkins:
+        default: Enable Jenkins
 Parameters:
   AvailabilityZones:
     Description: List of Availability Zones to use for the subnets in the VPC. Three
@@ -1175,6 +1181,39 @@ Parameters:
     Description: DNS domain name that users can use to access the Rancher console.
     Type: String
     Default: aws.private
+  ProvisionMetricsServer:
+    Type: String
+    AllowedValues: [ Enabled, Disabled ]
+    Default: Disabled
+    Description: "For more information, see https://docs.aws.amazon.com/eks/latest/userguide/metrics-server.html"
+  CustomAmiId:
+    Type: String
+    Default: ""
+    Description: "(Optional) If an AMI ID is specified, it is used instead of the AMI from your OS/Region."
+  EnableJenkins:
+    Type: String
+    Default: Disabled
+    AllowedValues: [Enabled, Disabled]
+    Description: "Deploy latest version of Jenkins to cluster"
+  GitHubUser:
+    Type: String
+    Default: ""
+  EnableSpinnaker:
+    Type: String
+    Default: Disabled
+    AllowedValues: [ Enabled, Disabled ]
+    Description: "Deploy latest version of Spinnaker"
+  IstioIntegration:
+    Type: String
+    Default: Disabled
+    AllowedValues: [ Enabled, Disabled ]
+    Description: "Deploy latest version of Istio"
+  IstioGateway:
+    Type: String
+    Default: Disabled
+    AllowedValues: [ Enabled, Disabled ]
+    Description: "Deploy latest version of Istio gateway"
+
 Conditions:
   EnablePrometheus: !Or
     - !Equals [!Ref PrometheusIntegration, "Enabled"]
@@ -1182,6 +1221,10 @@ Conditions:
   EnableGrafana: !Or
     - !Equals [!Ref GrafanaIntegration, "Enabled"]
     - !Equals [!Ref MonitoringStack, "Prometheus + Grafana"]
+  EnableMetricsServer: !Or
+    - !Equals [!Ref ProvisionMetricsServer, "Enabled"]
+    - !Equals [ !Ref PrometheusIntegration, "Enabled" ]
+    - !Equals [ !Ref MonitoringStack, "Prometheus + Grafana" ] #See deprecation warning
   DetectSharedStacks: !And
   - !Equals [!Ref PerAccountSharedResources, 'AutoDetect']
   - !Equals [!Ref PerRegionSharedResources, 'AutoDetect']
@@ -1195,6 +1238,13 @@ Conditions:
   UsingDefaultBucket: !Equals [!Ref QSS3BucketName, 'aws-quickstart']
   WindowsNodes: !Equals [!Ref NodeGroupOS, 'Windows']
   VaultEnabled: !Equals [!Ref VaultIntegration, 'Enabled']
+# Cannot use AWS Quickstart bucket due to additional custom workloads specific to this fork
+  JenkinsEnabled: !And
+    - !Equals [!Ref EnableJenkins, 'Enabled']
+    - !Not [!Equals [!Ref QSS3BucketName, ""]]
+  SpinnakerEnabled: !Equals [!Ref EnableSpinnaker, "Enabled"]
+  IstioEnabled: !Equals [!Ref IstioIntegration, "Enabled"]
+
 Mappings:
   Config:
     Prefix: { Value: 'eks-quickstart' }
@@ -1365,6 +1415,54 @@ Resources:
         RafaySysLastName: !Ref RafaySysLastName
         RafaySysOrganizationName: !Ref RafaySysOrganizationName
         RafaySysEmail: !Ref RafaySysEmail
+        ProvisionMetricsServer: !If [EnableMetricsServer, 'Enabled', 'Disabled']
+
+#Does not work with default bucket as this is a custom template.
+#TODO add new condition based on QSS3BucketRegion to auto stop template from deploying if using default bucket
+  JenkinsStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: JenkinsEnabled
+    DependsOn: EKSStack
+    Properties:
+      TemplateURL: !Sub
+        - 'https://${QSS3BucketName}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/jenkins.template.yaml'
+        - S3Region: !If [ UsingDefaultBucket, !Ref 'AWS::Region', !Ref QSS3BucketRegion ]
+      Parameters:
+        EksClusterName: !GetAtt EKSStack.Outputs.EKSClusterName
+        GitHubUser: !Ref GitHubUser
+#
+#  EFSStack:
+#    Type: AWS::CloudFormation::Stack
+#    Properties:
+#      TemplateURL: !Sub
+#        - 'https://${QSS3BucketName}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/es-fluentbit-firehose.template.yaml'
+#        - S3Region: !If [ UsingDefaultBucket, !Ref 'AWS::Region', !Ref QSS3BucketRegion ]
+#      Parameters:
+#        EksClusterName: !GetAtt EKSStack.Outputs.EKSClusterName
+#        OIDCIssuerURL: !Join [ '', !Split [ 'https://', !GetAtt EKSStack.Outputs.OIDCIssuerURL ] ]
+
+  SpinnakerStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: SpinnakerEnabled
+    Properties:
+      TemplateURL: !Sub
+        - 'https://${QSS3BucketName}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}templates/spinnaker.template.yaml'
+        - S3Region: !If [ UsingDefaultBucket, !Ref 'AWS::Region', !Ref QSS3BucketRegion ]
+      Parameters:
+        EksClusterName: !GetAtt EKSStack.Outputs.EKSClusterName
+        GitHubUser: !Ref GitHubUser
+
+  IstioStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: IstioEnabled
+    Properties:
+      TemplateURL: !Sub
+        - 'https://${QSS3BucketName}.s3.${S3Region}.${AWS::URLSuffix}/${QSS3KeyPrefix}submodules/eksquickstart-istio/templates/istio.template.yaml'
+        - S3Region: !If [ UsingDefaultBucket, !Ref 'AWS::Region', !Ref QSS3BucketRegion ]
+      Parameters:
+        EksClusterName: !GetAtt EKSStack.Outputs.EKSClusterName
+        GatewayEnabled: !Ref IstioGateway
+
 Outputs:
   EKSClusterName:
     Value: !GetAtt EKSStack.Outputs.EKSClusterName
